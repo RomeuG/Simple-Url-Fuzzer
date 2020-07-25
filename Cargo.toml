@@ -1,0 +1,12 @@
+[package]
+name = "url-fuzzer"
+version = "0.1.0"
+authors = ["Romeu Vieira <romeu.bizz@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+hyper = "0.13"
+tokio = { version = "0.2", features = ["full"] }
+pretty_env_logger = "0.4"
