@@ -1,6 +1,9 @@
 use reqwest;
 
 use std::env;
+
+use std::time::Duration;
+
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
 
@@ -9,7 +12,11 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 fn request(url: &str) -> Result<u16> {
 	println!("Initiating request to {}...", url);
 
-	let resp = reqwest::blocking::get(url)?
+	let client = reqwest::blocking::Client::builder()
+		.timeout(Duration::from_secs(5))
+		.build()?;
+
+	let resp = client.get(url).send()?
 		.status()
 		.as_u16();
 
@@ -43,15 +50,18 @@ fn main() -> Result<()> {
 	let url = &args[1];
 	let file = &args[2];
 
-	let result = request(&url)?;
-	println!("{}", result);
+	if !url.contains("@@") {
+		println!("Fuzzing indicator not present!");
+		std::process::exit(1);
+	}
 
 	let file_lines = load_file(&file)?;
 
 	for line in file_lines {
-		let new_url = url.to_owned() + &line;
+		//let new_url = url.to_owned() + &line;
+		let new_url = url.replace("@@", &line);
 		let result = request(&new_url)?;
-		println!("{}", result);
+		println!("{:?}", result);
 	}
 
 	println!("Finishing...");
