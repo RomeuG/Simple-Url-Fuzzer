@@ -10,10 +10,6 @@ use std::io::{self, prelude::*, BufReader};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-fn handler(e: reqwest::Error) {
-
-}
-
 fn request(url: &str) -> Result<u16> {
     let client = reqwest::blocking::Client::builder()
 		.timeout(Duration::from_secs(5))
@@ -27,6 +23,50 @@ fn request(url: &str) -> Result<u16> {
     };
 
     return Ok(code);
+}
+
+fn worker(thread_id: u32, url: String, lines: std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+	// for line in file_lines {
+	// 	let new_url = url.replace("@@", &line);
+
+	// 	let result = request(&new_url);
+	// 	match result {
+	// 		Ok(code) => {
+	// 			println!("[{}] - {}", code.to_string().green(), new_url);
+	// 			success_vec.push(new_url);
+	// 		},
+	// 		Err(e) => {
+	// 			println!("{:?}", e);
+	// 			failure_vec.push(new_url);
+	// 		}
+	// 	}
+    // }
+
+	loop {
+		let mut line_mutex = lines.lock().unwrap();
+
+		if (line_mutex.len() < 1) {
+			break;
+		}
+
+		let line = line_mutex[0].clone();
+		line_mutex.remove(0);
+		std::mem::drop(line_mutex);
+
+		let new_url = url.replace("@@", &line);
+		//println!("[{}] - Testing url: {}", thread_id, new_url);
+		let result = request(&new_url);
+		match result {
+			Ok(code) => {
+				println!("[{}] - {}", code.to_string().green(), new_url);
+				//success_vec.push(new_url);
+			},
+			Err(e) => {
+				println!("{:?}", e);
+				//failure_vec.push(new_url);
+			}
+		}
+	}
 }
 
 fn load_file(file: &str) -> Result<Vec<String>> {
@@ -54,7 +94,7 @@ fn main() -> Result<()> {
 		std::process::exit(1);
     }
 
-    let url = &args[1];
+    let url = args[1].clone();
     let file = &args[2];
 
     if !url.contains("@@") {
@@ -62,23 +102,21 @@ fn main() -> Result<()> {
 		std::process::exit(1);
     }
 
-    let file_lines = load_file(&file)?;
+    let file_lines = std::sync::Arc::new(std::sync::Mutex::new(load_file(&file)?));
 
-    for line in file_lines {
-		let new_url = url.replace("@@", &line);
+	// threading stuff
+	let mut threads = Vec::new();
 
-		let result = request(&new_url);
-		match result {
-			Ok(code) => {
-				println!("[{}] - {}", code.to_string().green(), new_url);
-				success_vec.push(new_url);
-			},
-			Err(e) => {
-				println!("{:?}", e);
-				failure_vec.push(new_url);
-			}
-		}
-    }
+	for thread_id in 0..64 {
+		let t_url = url.clone();
+		let vec_clone = file_lines.clone();
+
+		threads.push(std::thread::spawn(move || worker(thread_id, t_url, vec_clone)));
+	}
+
+	for thr in threads {
+		thr.join().unwrap();
+	}
 
     println!("Success: {} - Failure: {}", success_vec.len(), failure_vec.len());
     println!("Finishing...");
