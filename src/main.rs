@@ -5,10 +5,20 @@ use std::env;
 
 use std::time::Duration;
 
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
+
+use std::sync::{Arc, Mutex};
+
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+#[derive(Default)]
+struct Statistics {
+	codes: HashMap<String, Vec<String>>,
+}
 
 fn request(url: &str) -> Result<u16> {
     let client = reqwest::blocking::Client::builder()
@@ -25,23 +35,7 @@ fn request(url: &str) -> Result<u16> {
     return Ok(code);
 }
 
-fn worker(thread_id: u32, url: String, lines: std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
-	// for line in file_lines {
-	// 	let new_url = url.replace("@@", &line);
-
-	// 	let result = request(&new_url);
-	// 	match result {
-	// 		Ok(code) => {
-	// 			println!("[{}] - {}", code.to_string().green(), new_url);
-	// 			success_vec.push(new_url);
-	// 		},
-	// 		Err(e) => {
-	// 			println!("{:?}", e);
-	// 			failure_vec.push(new_url);
-	// 		}
-	// 	}
-    // }
-
+fn worker(thread_id: u32, url: String, lines: Arc<Mutex<Vec<String>>>, stats: Arc<Mutex<Statistics>>) {
 	loop {
 		let mut line_mutex = lines.lock().unwrap();
 
@@ -58,6 +52,16 @@ fn worker(thread_id: u32, url: String, lines: std::sync::Arc<std::sync::Mutex<Ve
 		let result = request(&new_url);
 		match result {
 			Ok(code) => {
+
+				let mut stats_mutex = stats.lock().unwrap();
+
+				match stats_mutex.codes.entry(code.to_string()) {
+					Entry::Vacant(e) => { e.insert(vec![new_url.clone()]); },
+					Entry::Occupied(mut e) => { e.get_mut().push(new_url.clone()); }
+				}
+
+				std::mem::drop(stats_mutex);
+
 				println!("[{}] - {}", code.to_string().green(), new_url);
 				//success_vec.push(new_url);
 			},
@@ -102,23 +106,35 @@ fn main() -> Result<()> {
 		std::process::exit(1);
     }
 
-    let file_lines = std::sync::Arc::new(std::sync::Mutex::new(load_file(&file)?));
+    let file_lines = Arc::new(Mutex::new(load_file(&file)?));
 
 	// threading stuff
 	let mut threads = Vec::new();
-
+	let mut _stats = Statistics {
+		codes: HashMap::new(),
+	};
+	let mut stats: Arc<Mutex<Statistics>> = Arc::new(Mutex::new(_stats));
+;
 	for thread_id in 0..64 {
 		let t_url = url.clone();
 		let vec_clone = file_lines.clone();
+		let stats_clone = stats.clone();
 
-		threads.push(std::thread::spawn(move || worker(thread_id, t_url, vec_clone)));
+		threads.push(std::thread::spawn(move || worker(thread_id, t_url, vec_clone, stats_clone)));
 	}
 
 	for thr in threads {
 		thr.join().unwrap();
 	}
 
-    println!("Success: {} - Failure: {}", success_vec.len(), failure_vec.len());
+	let mut stats_mutex = stats.lock().unwrap();
+
+	for (key, value) in stats_mutex.codes.clone() {
+		for item in value {
+			println!("{} / {}", key, item);
+		}
+	}
+
     println!("Finishing...");
 
     return Ok(());
