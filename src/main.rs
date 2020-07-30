@@ -1,6 +1,9 @@
 use reqwest;
 use colored::*;
 
+extern crate clap;
+use clap::{Arg, App, SubCommand};
+
 use std::env;
 
 use std::time::Duration;
@@ -109,19 +112,33 @@ fn load_file(file: &str) -> Result<Vec<String>> {
 }
 
 fn main() -> Result<()> {
-    let mut success_vec: Vec<String> = Vec::new();
-    let mut failure_vec: Vec<String> = Vec::new();
+	let matches = App::new("url-fuzzer")
+    	.version("0.1")
+    	.author("Romeu Gomes <romeu.bizz@gmail.com>")
+    	.about("This is an URL Fuzzer.")
+    	.arg(Arg::with_name("url")
+        	 .short("u")
+        	 .long("url")
+        	 .value_name("URL")
+        	 .help("Url to fuzz")
+        	 .takes_value(true))
+    	.arg(Arg::with_name("wordlist")
+			 .short("w")
+        	 .long("wordlist")
+        	 .value_name("FILE")
+        	 .help("Wordlist with 1 word per line")
+        	 .takes_value(true))
+    	.arg(Arg::with_name("threads")
+        	 .short("t")
+        	 .long("threads")
+        	 .value_name("N")
+        	 .help("Number of threads")
+        	 .takes_value(true))
+    	.get_matches();
 
-    // args
-    let args: Vec<String> = env::args().collect();
-
-    if args.len() < 3 {
-		println!("Not enough arguments!");
-		std::process::exit(1);
-    }
-
-    let url = args[1].clone();
-    let file = &args[2];
+	let url = matches.value_of("url").unwrap().to_owned();
+	let file = matches.value_of("wordlist").unwrap();
+	let nthreads = matches.value_of("threads").unwrap();
 
     if !url.contains("@@") {
 		println!("Fuzzing indicator not present!");
@@ -139,12 +156,12 @@ fn main() -> Result<()> {
 
 	let mut stats: Arc<Mutex<Statistics>> = Arc::new(Mutex::new(_stats));
 
-	for thread_id in 0..128 {
+	for thread_id in 0..nthreads.parse::<u32>().unwrap() {
 		let t_url = url.clone();
 		let vec_clone = file_lines.clone();
 		let stats_clone = stats.clone();
 
-		threads.push(std::thread::spawn(move || worker(thread_id, t_url, vec_clone, stats_clone)));
+		threads.push(std::thread::spawn(move || worker(thread_id, t_url.to_string(), vec_clone, stats_clone)));
 	}
 
 	for thr in threads {
