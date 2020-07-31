@@ -1,5 +1,6 @@
 use reqwest;
 use colored::*;
+use url::{Url, Host, Position};
 
 extern crate clap;
 use clap::{Arg, App, SubCommand};
@@ -147,6 +148,11 @@ fn main() -> Result<()> {
 
     let file_lines = Arc::new(Mutex::new(load_file(&file)?));
 
+	// fs
+	let url_parsed = Url::parse(&url.clone())?;
+	let dir_name = url_parsed.host_str().unwrap();
+	std::fs::create_dir(dir_name)?;
+
     // threading stuff
     let mut threads = Vec::new();
     let mut _stats = Statistics {
@@ -157,11 +163,11 @@ fn main() -> Result<()> {
     let mut stats: Arc<Mutex<Statistics>> = Arc::new(Mutex::new(_stats));
 
     for thread_id in 0..nthreads.parse::<u32>().unwrap() {
-		let t_url = url.clone();
+		let url_clone = url.clone();
 		let vec_clone = file_lines.clone();
 		let stats_clone = stats.clone();
 
-		threads.push(std::thread::spawn(move || worker(thread_id, t_url.to_string(), vec_clone, stats_clone)));
+		threads.push(std::thread::spawn(move || worker(thread_id, url_clone.to_string(), vec_clone, stats_clone)));
     }
 
     for thr in threads {
