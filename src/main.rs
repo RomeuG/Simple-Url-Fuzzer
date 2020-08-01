@@ -150,8 +150,8 @@ fn main() -> Result<()> {
 
 	// fs
 	let url_parsed = Url::parse(&url.clone())?;
-	let dir_name = url_parsed.host_str().unwrap();
-	std::fs::create_dir(dir_name)?;
+	let dir_name = url_parsed.host_str().unwrap().to_owned();
+	std::fs::create_dir(dir_name.clone()).unwrap_or(());
 
     // threading stuff
     let mut threads = Vec::new();
@@ -166,6 +166,7 @@ fn main() -> Result<()> {
 		let url_clone = url.clone();
 		let vec_clone = file_lines.clone();
 		let stats_clone = stats.clone();
+		let dir_clone = dir_name.clone();
 
 		threads.push(std::thread::spawn(move || worker(thread_id, url_clone.to_string(), vec_clone, stats_clone)));
     }
@@ -176,9 +177,13 @@ fn main() -> Result<()> {
 
     let mut stats_mutex = stats.lock().unwrap();
 
-    for (key, value) in stats_mutex.errors.clone() {
+    for (key, value) in stats_mutex.codes.clone() {
+
+		let mut result_file = std::fs::File::create(dir_name.clone().to_string() + "/" + &key + ".txt").expect("create failed");
+
 		for item in value {
-			println!("{} / {}", key, item);
+			let formatted = format!("{}\n", item);
+			result_file.write(formatted.as_bytes());
 		}
     }
 
