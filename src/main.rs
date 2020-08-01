@@ -177,15 +177,28 @@ fn main() -> Result<()> {
 
     let mut stats_mutex = stats.lock().unwrap();
 
+	// save http codes
     for (key, value) in stats_mutex.codes.clone() {
 
-		let mut result_file = std::fs::File::create(dir_name.clone().to_string() + "/" + &key + ".txt").expect("create failed");
+		let mut result_file = std::fs::File::create(dir_name.clone().to_string() + "/" + &key + ".txt").expect("Codes file creation failed.");
 
 		for item in value {
 			let formatted = format!("{}\n", item);
 			result_file.write(formatted.as_bytes());
 		}
     }
+
+	// save errors
+    for (key, value) in stats_mutex.errors.clone() {
+
+		let mut result_file = std::fs::File::create(dir_name.clone().to_string() + "/" + &key + ".txt").expect("Error file creation failed.");
+
+		for item in value {
+			let formatted = format!("{}\n", item);
+			result_file.write(formatted.as_bytes());
+		}
+    }
+
 
     println!("Finishing...");
 
