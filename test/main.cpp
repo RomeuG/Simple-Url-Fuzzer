@@ -4,12 +4,14 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <thread>
 #include <vector>
 
 #include <argp.h>
+#include <curl/curl.h>
 #include <getopt.h>
 #include <sys/resource.h>
 
@@ -60,14 +62,13 @@ static auto argp_parseopts(int key, char* arg, struct argp_state* state) -> erro
     return 0;
 }
 
-struct S {
-    S(int n) : a{n} {};
-    void increment() { a++; };
-
-    int a;
+struct Statistics {
+	std::map<std::string, std::vector<std::string>> resp_list;
+	std::map<std::string, std::vector<std::string>> error_list;
 };
 
-std::vector<std::string> file_read_lines(char* file) {
+std::vector<std::string> file_read_lines(char *file)
+{
 	std::ifstream in(file);
 
 	std::string line;
@@ -88,9 +89,35 @@ void file_write_lines(char* filename, std::vector<std::string> vec)
 		}
 	}
 }
-std::mutex wordlist_mutex;
 
-void worker(int thread_id, std::string url, std::shared_ptr<std::vector<std::string>> wordlist) {
+size_t write_data(void *buffer, size_t size, size_t nmemb, void *userp)
+{
+   return size * nmemb;
+}
+
+long request(char const* url)
+{
+	CURL *curl = curl_easy_init();
+
+	curl_easy_setopt(curl, CURLOPT_URL, url);
+	curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);
+	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5);
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
+
+	CURLcode curlcode = curl_easy_perform(curl);
+	long http_code = 0;
+
+	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+
+	curl_easy_cleanup(curl);
+
+	return (curlcode == 0) ? http_code : curlcode;
+}
+
+std::mutex wordlist_mutex;
+std::mutex stats_mutex;
+
+void worker(int thread_id, std::string url, std::shared_ptr<std::vector<std::string>> wordlist, std::shared_ptr<Statistics> statistics) {
 
 	for (;;) {
 		std::string line;
@@ -106,7 +133,21 @@ void worker(int thread_id, std::string url, std::shared_ptr<std::vector<std::str
 			wordlist->erase(wordlist->begin());
 		}
 
-		std::printf("I got this line: %s\n", line.c_str());
+		std::string endpoint = url + line;
+		long http_code = request(endpoint.c_str());
+
+		if (http_code < 200) {
+			std::printf("[%d] - %s (%s)\n", http_code, endpoint.c_str(), curl_easy_strerror((CURLcode)http_code));
+		} else {
+			{
+				std::lock_guard<std::mutex> const lock(stats_mutex);
+
+				auto code_as_string = std::to_string(http_code);
+				statistics->resp_list[code_as_string].emplace_back(endpoint);
+			}
+
+			std::printf("[%d] - %s\n", http_code, endpoint.c_str());
+	    }
 	}
 }
 
@@ -126,19 +167,28 @@ int main(int argc, char** argv)
 	}
 
 	auto wordlist = file_read_lines(file);
-	std::shared_ptr<std::vector<std::string>> wordlist_shared = std::make_shared<std::vector<std::string>>(wordlist);
+	if (wordlist.size() < 1) {
+		std::printf("Wordlist is empty!\n");
+		exit(1);
+	}
+
+	curl_global_init(CURL_GLOBAL_ALL);
+
+	auto wordlist_shared = std::make_shared<std::vector<std::string>>(wordlist);
 
 	std::vector<std::thread> thread_list;
-	std::shared_ptr<S> variable = std::make_shared<S>(0);
+	std::shared_ptr<Statistics> statistics = std::make_shared<Statistics>();
 
 	for (int i = 0; i < threads; i++) {
-		std::thread t(worker, i, url, wordlist_shared);
+		std::thread t(worker, i, url, wordlist_shared, statistics);
 		thread_list.emplace_back(std::move(t));
 	}
 
 	for (std::thread &t : thread_list) {
 		t.join();
 	}
+
+	curl_global_cleanup();
 
 	struct rusage usage;
 	int who = RUSAGE_SELF;
@@ -148,7 +198,6 @@ int main(int argc, char** argv)
 
 	std::printf("Memory usage: %d\n", usage.ru_maxrss);
 	std::printf("Total file lines: %d\n", wordlist.size());
-	std::printf("Total: %d\n", variable->a);
-
+	std::printf("Stats: %d responses\n", statistics->resp_list.size());
 	return 0;
 }
