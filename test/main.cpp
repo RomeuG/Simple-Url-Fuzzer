@@ -80,6 +80,14 @@ std::vector<std::string> file_read_lines(char* file) {
 	return lines;
 }
 
+void file_write_lines(char* filename, std::vector<std::string> vec)
+{
+	if (std::ofstream ofs(filename); ofs) {
+		for (auto &str : vec) {
+			ofs << str << std::endl;
+		}
+	}
+}
 std::mutex wordlist_mutex;
 
 void worker(int thread_id, std::string url, std::shared_ptr<std::vector<std::string>> wordlist) {
