@@ -14,6 +14,9 @@
 #include <curl/curl.h>
 #include <getopt.h>
 #include <sys/resource.h>
+#include <sys/stat.h>
+
+#include <uriparser/Uri.h>
 
 // argp stuff
 const char* argp_program_version = "url-fuzzer.0.0.1";
@@ -62,10 +65,75 @@ static auto argp_parseopts(int key, char* arg, struct argp_state* state) -> erro
     return 0;
 }
 
+
+static int do_mkdir(const char* path, mode_t mode)
+{
+    struct stat st;
+    int status = 0;
+
+    if (stat(path, &st) != 0) {
+        if (mkdir(path, mode) != 0 && errno != EEXIST) {
+            status = -1;
+        }
+    } else if (!S_ISDIR(st.st_mode)) {
+        errno = ENOTDIR;
+        status = -1;
+    }
+
+    return status;
+}
+
+static int mkpath(const char* path, mode_t mode)
+{
+    char* pp;
+    char* sp;
+    int status;
+    char* copypath = strdup(path);
+
+    status = 0;
+    pp = copypath;
+    while (status == 0 && (sp = strchr(pp, '/')) != 0) {
+        if (sp != pp) {
+            *sp = '\0';
+            status = do_mkdir(copypath, mode);
+            *sp = '/';
+        }
+        pp = sp + 1;
+    }
+
+    if (status == 0) {
+        status = do_mkdir(path, mode);
+    }
+
+    free(copypath);
+
+    return status;
+}
+
+
 struct Statistics {
 	std::map<std::string, std::vector<std::string>> resp_list;
 	std::map<std::string, std::vector<std::string>> error_list;
 };
+
+std::string get_url_host(char* url)
+{
+	std::string host;
+
+	UriUriA uri;
+	char const *error;
+
+	if (uriParseSingleUriA(&uri, url, &error) != URI_SUCCESS) {
+		std::printf("Failure parsing string!\n");
+		exit(1);
+	}
+
+	host = std::string(uri.hostText.first);
+
+	uriFreeUriMembersA(&uri);
+
+	return host;
+}
 
 std::vector<std::string> file_read_lines(char *file)
 {
@@ -81,9 +149,12 @@ std::vector<std::string> file_read_lines(char *file)
 	return lines;
 }
 
-void file_write_lines(char* filename, std::vector<std::string> vec)
+void file_write_lines(char const* filename, std::vector<std::string> vec)
 {
-	if (std::ofstream ofs(filename); ofs) {
+	std::ofstream ofs(filename);
+
+	if (ofs) {
+		std::printf("Writing to file: %s\n", filename);
 		for (auto &str : vec) {
 			ofs << str << std::endl;
 		}
@@ -137,6 +208,11 @@ void worker(int thread_id, std::string url, std::shared_ptr<std::vector<std::str
 		long http_code = request(endpoint.c_str());
 
 		if (http_code < 200) {
+			// {
+			// 	std::lock_guard<std::mutex> const lock(stats_mutex);
+
+
+			// }
 			std::printf("[%d] - %s (%s)\n", http_code, endpoint.c_str(), curl_easy_strerror((CURLcode)http_code));
 		} else {
 			{
@@ -190,6 +266,18 @@ int main(int argc, char** argv)
 
 	curl_global_cleanup();
 
+	std::string host = get_url_host(url);
+	mkpath(host.c_str(), 0700);
+
+	for (auto &it : statistics->resp_list) {
+		auto file_name = it.first + ".txt";
+		auto path = host + file_name;
+
+		std::printf("Begin writing to file: %s\n", path.c_str());
+
+		file_write_lines(path.c_str(), it.second);
+	}
+
 	struct rusage usage;
 	int who = RUSAGE_SELF;
 	int ret;
@@ -199,5 +287,6 @@ int main(int argc, char** argv)
 	std::printf("Memory usage: %d\n", usage.ru_maxrss);
 	std::printf("Total file lines: %d\n", wordlist.size());
 	std::printf("Stats: %d responses\n", statistics->resp_list.size());
+
 	return 0;
 }
