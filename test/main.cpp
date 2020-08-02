@@ -13,6 +13,7 @@
 #include <argp.h>
 #include <curl/curl.h>
 #include <getopt.h>
+#include <signal.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 
@@ -110,6 +111,12 @@ static int mkpath(const char* path, mode_t mode)
     return status;
 }
 
+std::atomic<bool> stop_threads = false;
+void signal_handler(int s)
+{
+	printf("Caught signal %d\n", s);
+	stop_threads = true;
+}
 
 struct Statistics {
 	std::map<std::string, std::vector<std::string>> resp_list;
@@ -191,6 +198,10 @@ std::mutex stats_mutex;
 void worker(int thread_id, std::string url, std::shared_ptr<std::vector<std::string>> wordlist, std::shared_ptr<Statistics> statistics) {
 
 	for (;;) {
+		if (stop_threads) {
+			break;
+		}
+
 		std::string line;
 
 		{
@@ -249,6 +260,15 @@ int main(int argc, char** argv)
 	}
 
 	curl_global_init(CURL_GLOBAL_ALL);
+
+	// prepare signal handling
+	struct sigaction sigIntHandler;
+
+	sigIntHandler.sa_handler = signal_handler;
+	sigemptyset(&sigIntHandler.sa_mask);
+	sigIntHandler.sa_flags = 0;
+
+	sigaction(SIGINT, &sigIntHandler, NULL);
 
 	auto wordlist_shared = std::make_shared<std::vector<std::string>>(wordlist);
 
