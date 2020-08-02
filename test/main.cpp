@@ -3,7 +3,9 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <iostream>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -78,7 +80,26 @@ std::vector<std::string> file_read_lines(char* file) {
 	return lines;
 }
 
-void worker(int thread_id, std::string url, std::vector<std::string> wordlist) {
+std::mutex wordlist_mutex;
+
+void worker(int thread_id, std::string url, std::shared_ptr<std::vector<std::string>> wordlist) {
+
+	for (;;) {
+		std::string line;
+
+		{
+			std::lock_guard<std::mutex> const lock(wordlist_mutex);
+
+			if (wordlist->size() < 1) {
+				break;
+			}
+
+			line = wordlist->at(0);
+			wordlist->erase(wordlist->begin());
+		}
+
+		std::printf("I got this line: %s\n", line.c_str());
+	}
 }
 
 int main(int argc, char** argv)
@@ -97,12 +118,13 @@ int main(int argc, char** argv)
 	}
 
 	auto wordlist = file_read_lines(file);
+	std::shared_ptr<std::vector<std::string>> wordlist_shared = std::make_shared<std::vector<std::string>>(wordlist);
 
 	std::vector<std::thread> thread_list;
 	std::shared_ptr<S> variable = std::make_shared<S>(0);
 
 	for (int i = 0; i < threads; i++) {
-		std::thread t(worker, i, url, wordlist);
+		std::thread t(worker, i, url, wordlist_shared);
 		thread_list.emplace_back(std::move(t));
 	}
 
