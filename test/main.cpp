@@ -72,7 +72,20 @@ static error_t argp_parseopts(int key, char* arg, struct argp_state* state)
     return 0;
 }
 
-static int do_mkdir(const char* path, mode_t mode)
+void replace(std::string& str, std::string_view const from, std::string_view const to)
+{
+    if (from.empty()) {
+        return;
+    }
+
+    std::size_t start_pos = 0;
+    while ((start_pos = str.find(from, start_pos)) != std::string::npos) {
+        str.replace(start_pos, from.length(), to);
+        start_pos += to.length();
+    }
+}
+
+static int do_mkdir(char const* path, mode_t mode)
 {
     struct stat st;
     int status = 0;
@@ -89,7 +102,7 @@ static int do_mkdir(const char* path, mode_t mode)
     return status;
 }
 
-static int mkpath(const char* path, mode_t mode)
+static int mkpath(char const* path, mode_t mode)
 {
     char* pp;
     char* sp;
@@ -129,7 +142,7 @@ struct Statistics {
     std::map<std::string, std::vector<std::string>> error_list;
 };
 
-std::string get_url_host(char* url)
+std::string get_url_host(char const* url)
 {
     std::string host;
 
@@ -148,7 +161,7 @@ std::string get_url_host(char* url)
     return host;
 }
 
-std::vector<std::string> file_read_lines(char* file)
+std::vector<std::string> file_read_lines(char const* file)
 {
     std::ifstream in(file);
 
@@ -208,6 +221,8 @@ void worker(int thread_id, std::string url,
             std::shared_ptr<Statistics> statistics)
 {
     for (;;) {
+        std::string url_copy = url;
+
         if (stop_threads) {
             break;
         }
@@ -225,28 +240,28 @@ void worker(int thread_id, std::string url,
             wordlist->erase(wordlist->begin());
         }
 
-        std::string endpoint = url + line;
-        long http_code = request(endpoint.c_str());
+        replace(url_copy, "@@", line);
+        long http_code = request(url_copy.c_str());
 
         if (http_code < 200) {
             {
                 std::lock_guard<std::mutex> const lock(stats_mutex);
 
                 auto code_as_string = std::to_string(http_code);
-                statistics->error_list[code_as_string].emplace_back(endpoint);
+                statistics->error_list[code_as_string].emplace_back(url_copy);
             }
 
-            std::printf("[%d] - %s (%s)\n", http_code, endpoint.c_str(),
+            std::printf("[%d] - %s (%s)\n", http_code, url_copy.c_str(),
                         curl_easy_strerror((CURLcode)http_code));
         } else {
             {
                 std::lock_guard<std::mutex> const lock(stats_mutex);
 
                 auto code_as_string = std::to_string(http_code);
-                statistics->resp_list[code_as_string].emplace_back(endpoint);
+                statistics->resp_list[code_as_string].emplace_back(url_copy);
             }
 
-            std::printf("[%d] - %s\n", http_code, endpoint.c_str());
+            std::printf("[%d] - %s\n", http_code, url_copy.c_str());
         }
     }
 }
@@ -256,17 +271,22 @@ int main(int argc, char** argv)
     static struct argp argp = { options, argp_parseopts, args_doc, doc, 0, 0, 0 };
     argp_parse(&argp, argc, argv, 0, 0, &pargs);
 
-    auto url = pargs.argu;
-    auto file = pargs.argw;
-    auto threads = pargs.argt;
-
     // TODO: check this in argp_parseopts
-    if (url == nullptr) {
+    if (pargs.argu == nullptr) {
         std::printf("Url not valid!\n");
         exit(1);
     }
 
-    auto wordlist = file_read_lines(file);
+    std::string url = pargs.argu;
+    std::string file = pargs.argw;
+    int threads = pargs.argt;
+
+    if (url.find("@@") == -1) {
+        std::printf("Url does not include fuzz indicator!\n");
+        exit(1);
+    }
+
+    auto wordlist = file_read_lines(file.c_str());
     if (wordlist.size() < 1) {
         std::printf("Wordlist is empty!\n");
         exit(1);
@@ -299,7 +319,8 @@ int main(int argc, char** argv)
 
     curl_global_cleanup();
 
-    std::string host = get_url_host(url);
+    std::string host = get_url_host(url.c_str());
+    replace(host, "@@", "");
     mkpath(host.c_str(), 0700);
 
     for (auto& it : statistics->resp_list) {
