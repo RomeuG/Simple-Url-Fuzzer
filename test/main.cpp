@@ -1,23 +1,21 @@
+#include <argp.h>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <curl/curl.h>
 #include <fstream>
+#include <getopt.h>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <mutex>
-#include <thread>
-#include <vector>
-
-#include <argp.h>
-#include <curl/curl.h>
-#include <getopt.h>
 #include <signal.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
-
+#include <thread>
 #include <uriparser/Uri.h>
+#include <vector>
 
 // argp stuff
 const char* argp_program_version = "url-fuzzer.0.0.1";
@@ -25,10 +23,10 @@ const char* argp_program_bug_address = "<romeu.bizz@gmail.com>";
 static char doc[] = "Software to do some URL Fuzzing.";
 static char args_doc[] = "[URL]...";
 static struct argp_option options[] = {
-    {"url", 'u', "value", 0, "Url to fuzz"},
-    {"wordlist", 'w', "value", 0, "Wordlist with 1 string per line"},
-    {"threads", 't', "value", 0, "Number of threads"},
-    {0}
+    { "url", 'u', "value", 0, "Url to fuzz" },
+    { "wordlist", 'w', "value", 0, "Wordlist with 1 string per line" },
+    { "threads", 't', "value", 0, "Number of threads" },
+    { 0 }
 };
 
 struct ArgOpts {
@@ -42,7 +40,7 @@ struct ArgOpts {
 
 ArgOpts pargs = {};
 
-static auto argp_parseopts(int key, char* arg, struct argp_state* state) -> error_t
+static error_t argp_parseopts(int key, char* arg, struct argp_state* state)
 {
     switch (key) {
         case 'u':
@@ -65,7 +63,6 @@ static auto argp_parseopts(int key, char* arg, struct argp_state* state) -> erro
 
     return 0;
 }
-
 
 static int do_mkdir(const char* path, mode_t mode)
 {
@@ -114,199 +111,201 @@ static int mkpath(const char* path, mode_t mode)
 std::atomic<bool> stop_threads = false;
 void signal_handler(int s)
 {
-	printf("Caught signal %d\n", s);
-	stop_threads = true;
+    printf("Caught signal %d\n", s);
+    stop_threads = true;
 }
 
 struct Statistics {
-	std::map<std::string, std::vector<std::string>> resp_list;
-	std::map<std::string, std::vector<std::string>> error_list;
+    std::map<std::string, std::vector<std::string>> resp_list;
+    std::map<std::string, std::vector<std::string>> error_list;
 };
 
 std::string get_url_host(char* url)
 {
-	std::string host;
+    std::string host;
 
-	UriUriA uri;
-	char const *error;
+    UriUriA uri;
+    char const* error;
 
-	if (uriParseSingleUriA(&uri, url, &error) != URI_SUCCESS) {
-		std::printf("Failure parsing string!\n");
-		exit(1);
-	}
+    if (uriParseSingleUriA(&uri, url, &error) != URI_SUCCESS) {
+        std::printf("Failure parsing string!\n");
+        exit(1);
+    }
 
-	host = std::string(uri.hostText.first);
+    host = std::string(uri.hostText.first);
 
-	uriFreeUriMembersA(&uri);
+    uriFreeUriMembersA(&uri);
 
-	return host;
+    return host;
 }
 
-std::vector<std::string> file_read_lines(char *file)
+std::vector<std::string> file_read_lines(char* file)
 {
-	std::ifstream in(file);
+    std::ifstream in(file);
 
-	std::string line;
-	std::vector<std::string> lines;
+    std::string line;
+    std::vector<std::string> lines;
 
-	while (std::getline(in, line)) {
-		lines.emplace_back(line);
-	}
+    while (std::getline(in, line)) {
+        lines.emplace_back(line);
+    }
 
-	return lines;
+    return lines;
 }
 
 void file_write_lines(char const* filename, std::vector<std::string> vec)
 {
-	std::ofstream ofs(filename);
+    std::ofstream ofs(filename);
 
-	if (ofs) {
-		std::printf("Writing to file: %s\n", filename);
-		for (auto &str : vec) {
-			ofs << str << std::endl;
-		}
-	}
+    if (ofs) {
+        std::printf("Writing to file: %s\n", filename);
+        for (auto& str : vec) {
+            ofs << str << std::endl;
+        }
+    }
 }
 
-size_t write_data(void *buffer, size_t size, size_t nmemb, void *userp)
+size_t write_data(void* buffer, size_t size, size_t nmemb, void* userp)
 {
-   return size * nmemb;
+    return size * nmemb;
 }
 
 long request(char const* url)
 {
-	CURL *curl = curl_easy_init();
+    CURL* curl = curl_easy_init();
 
-	curl_easy_setopt(curl, CURLOPT_URL, url);
-	curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);
-	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5);
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
 
-	CURLcode curlcode = curl_easy_perform(curl);
-	long http_code = 0;
+    CURLcode curlcode = curl_easy_perform(curl);
+    long http_code = 0;
 
-	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
 
-	curl_easy_cleanup(curl);
+    curl_easy_cleanup(curl);
 
-	return (curlcode == 0) ? http_code : curlcode;
+    return (curlcode == 0) ? http_code : curlcode;
 }
 
 std::mutex wordlist_mutex;
 std::mutex stats_mutex;
 
-void worker(int thread_id, std::string url, std::shared_ptr<std::vector<std::string>> wordlist, std::shared_ptr<Statistics> statistics) {
+void worker(int thread_id, std::string url,
+            std::shared_ptr<std::vector<std::string>> wordlist,
+            std::shared_ptr<Statistics> statistics)
+{
+    for (;;) {
+        if (stop_threads) {
+            break;
+        }
 
-	for (;;) {
-		if (stop_threads) {
-			break;
-		}
+        std::string line;
 
-		std::string line;
+        {
+            std::lock_guard<std::mutex> const lock(wordlist_mutex);
 
-		{
-			std::lock_guard<std::mutex> const lock(wordlist_mutex);
+            if (wordlist->size() < 1) {
+                break;
+            }
 
-			if (wordlist->size() < 1) {
-				break;
-			}
+            line = wordlist->at(0);
+            wordlist->erase(wordlist->begin());
+        }
 
-			line = wordlist->at(0);
-			wordlist->erase(wordlist->begin());
-		}
+        std::string endpoint = url + line;
+        long http_code = request(endpoint.c_str());
 
-		std::string endpoint = url + line;
-		long http_code = request(endpoint.c_str());
+        if (http_code < 200) {
+            // {
+            // 	std::lock_guard<std::mutex> const lock(stats_mutex);
 
-		if (http_code < 200) {
-			// {
-			// 	std::lock_guard<std::mutex> const lock(stats_mutex);
+            // }
+            std::printf("[%d] - %s (%s)\n", http_code, endpoint.c_str(),
+                        curl_easy_strerror((CURLcode)http_code));
+        } else {
+            {
+                std::lock_guard<std::mutex> const lock(stats_mutex);
 
+                auto code_as_string = std::to_string(http_code);
+                statistics->resp_list[code_as_string].emplace_back(endpoint);
+            }
 
-			// }
-			std::printf("[%d] - %s (%s)\n", http_code, endpoint.c_str(), curl_easy_strerror((CURLcode)http_code));
-		} else {
-			{
-				std::lock_guard<std::mutex> const lock(stats_mutex);
-
-				auto code_as_string = std::to_string(http_code);
-				statistics->resp_list[code_as_string].emplace_back(endpoint);
-			}
-
-			std::printf("[%d] - %s\n", http_code, endpoint.c_str());
-	    }
-	}
+            std::printf("[%d] - %s\n", http_code, endpoint.c_str());
+        }
+    }
 }
 
 int main(int argc, char** argv)
 {
-	static struct argp argp = { options, argp_parseopts, args_doc, doc, 0, 0, 0 };
+    static struct argp argp = { options, argp_parseopts, args_doc, doc, 0, 0, 0 };
     argp_parse(&argp, argc, argv, 0, 0, &pargs);
 
-	auto url = pargs.argu;
-	auto file = pargs.argw;
-	auto threads = std::stoi(pargs.argt);
+    auto url = pargs.argu;
+    auto file = pargs.argw;
+    auto threads = std::stoi(pargs.argt);
 
-	// TODO: check this in argp_parseopts
-	if (url == nullptr) {
-		std::printf("Url not valid!\n");
-		exit(1);
-	}
+    // TODO: check this in argp_parseopts
+    if (url == nullptr) {
+        std::printf("Url not valid!\n");
+        exit(1);
+    }
 
-	auto wordlist = file_read_lines(file);
-	if (wordlist.size() < 1) {
-		std::printf("Wordlist is empty!\n");
-		exit(1);
-	}
+    auto wordlist = file_read_lines(file);
+    if (wordlist.size() < 1) {
+        std::printf("Wordlist is empty!\n");
+        exit(1);
+    }
 
-	curl_global_init(CURL_GLOBAL_ALL);
+    curl_global_init(CURL_GLOBAL_ALL);
 
-	// prepare signal handling
-	struct sigaction sigIntHandler;
+    // prepare signal handling
+    struct sigaction sigIntHandler;
 
-	sigIntHandler.sa_handler = signal_handler;
-	sigemptyset(&sigIntHandler.sa_mask);
-	sigIntHandler.sa_flags = 0;
+    sigIntHandler.sa_handler = signal_handler;
+    sigemptyset(&sigIntHandler.sa_mask);
+    sigIntHandler.sa_flags = 0;
 
-	sigaction(SIGINT, &sigIntHandler, NULL);
+    sigaction(SIGINT, &sigIntHandler, NULL);
 
-	auto wordlist_shared = std::make_shared<std::vector<std::string>>(wordlist);
+    auto wordlist_shared = std::make_shared<std::vector<std::string>>(wordlist);
 
-	std::vector<std::thread> thread_list;
-	std::shared_ptr<Statistics> statistics = std::make_shared<Statistics>();
+    std::vector<std::thread> thread_list;
+    std::shared_ptr<Statistics> statistics = std::make_shared<Statistics>();
 
-	for (int i = 0; i < threads; i++) {
-		std::thread t(worker, i, url, wordlist_shared, statistics);
-		thread_list.emplace_back(std::move(t));
-	}
+    for (int i = 0; i < threads; i++) {
+        std::thread t(worker, i, url, wordlist_shared, statistics);
+        thread_list.emplace_back(std::move(t));
+    }
 
-	for (std::thread &t : thread_list) {
-		t.join();
-	}
+    for (std::thread& t : thread_list) {
+        t.join();
+    }
 
-	curl_global_cleanup();
+    curl_global_cleanup();
 
-	std::string host = get_url_host(url);
-	mkpath(host.c_str(), 0700);
+    std::string host = get_url_host(url);
+    mkpath(host.c_str(), 0700);
 
-	for (auto &it : statistics->resp_list) {
-		auto file_name = it.first + ".txt";
-		auto path = host + file_name;
+    for (auto& it : statistics->resp_list) {
+        auto file_name = it.first + ".txt";
+        auto path = host + file_name;
 
-		std::printf("Begin writing to file: %s\n", path.c_str());
+        std::printf("Begin writing to file: %s\n", path.c_str());
 
-		file_write_lines(path.c_str(), it.second);
-	}
+        file_write_lines(path.c_str(), it.second);
+    }
 
-	struct rusage usage;
-	int who = RUSAGE_SELF;
-	int ret;
+    struct rusage usage;
+    int who = RUSAGE_SELF;
+    int ret;
 
-	ret = getrusage(who, &usage);
+    ret = getrusage(who, &usage);
 
-	std::printf("Memory usage: %d\n", usage.ru_maxrss);
-	std::printf("Total file lines: %d\n", wordlist.size());
-	std::printf("Stats: %d responses\n", statistics->resp_list.size());
+    std::printf("Memory usage: %d\n", usage.ru_maxrss);
+    std::printf("Total file lines: %d\n", wordlist.size());
+    std::printf("Stats: %d responses\n", statistics->resp_list.size());
 
-	return 0;
+    return 0;
 }
