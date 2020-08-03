@@ -32,7 +32,8 @@ static struct argp_option options[] = {
 struct ArgOpts {
     char* argu;
     char* argw;
-    char* argt;
+    int argt;
+
     int optu;
     int optw;
     int optt;
@@ -53,7 +54,7 @@ static error_t argp_parseopts(int key, char* arg, struct argp_state* state)
             break;
         case 't':
             pargs.optt = 1;
-            pargs.argt = strdup(arg);
+            pargs.argt = std::stoi(arg);
             break;
         case ARGP_KEY_ARG:
             return 0;
@@ -109,6 +110,7 @@ static int mkpath(const char* path, mode_t mode)
 }
 
 std::atomic<bool> stop_threads = false;
+
 void signal_handler(int s)
 {
     printf("Caught signal %d\n", s);
@@ -162,6 +164,8 @@ void file_write_lines(char const* filename, std::vector<std::string> vec)
         for (auto& str : vec) {
             ofs << str << std::endl;
         }
+    } else {
+        std::printf("Failure opening %s for writing\n", filename);
     }
 }
 
@@ -247,7 +251,7 @@ int main(int argc, char** argv)
 
     auto url = pargs.argu;
     auto file = pargs.argw;
-    auto threads = std::stoi(pargs.argt);
+    auto threads = pargs.argt;
 
     // TODO: check this in argp_parseopts
     if (url == nullptr) {
@@ -270,7 +274,7 @@ int main(int argc, char** argv)
     sigemptyset(&sigIntHandler.sa_mask);
     sigIntHandler.sa_flags = 0;
 
-    sigaction(SIGINT, &sigIntHandler, NULL);
+    sigaction(SIGINT, &sigIntHandler, nullptr);
 
     auto wordlist_shared = std::make_shared<std::vector<std::string>>(wordlist);
 
