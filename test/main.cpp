@@ -218,10 +218,13 @@ void worker(int thread_id, std::string url,
         long http_code = request(endpoint.c_str());
 
         if (http_code < 200) {
-            // {
-            // 	std::lock_guard<std::mutex> const lock(stats_mutex);
+            {
+                std::lock_guard<std::mutex> const lock(stats_mutex);
 
-            // }
+                auto code_as_string = std::to_string(http_code);
+                statistics->error_list[code_as_string].emplace_back(endpoint);
+            }
+
             std::printf("[%d] - %s (%s)\n", http_code, endpoint.c_str(),
                         curl_easy_strerror((CURLcode)http_code));
         } else {
@@ -289,6 +292,15 @@ int main(int argc, char** argv)
     mkpath(host.c_str(), 0700);
 
     for (auto& it : statistics->resp_list) {
+        auto file_name = it.first + ".txt";
+        auto path = host + file_name;
+
+        std::printf("Begin writing to file: %s\n", path.c_str());
+
+        file_write_lines(path.c_str(), it.second);
+    }
+
+    for (auto& it : statistics->error_list) {
         auto file_name = it.first + ".txt";
         auto path = host + file_name;
 
