@@ -26,6 +26,7 @@ static struct argp_option options[] = {
     { "url", 'u', "value", 0, "Url to fuzz" },
     { "wordlist", 'w', "value", 0, "Wordlist with 1 string per line" },
     { "threads", 't', "value", 0, "Number of threads" },
+    { "timeout", 'm', "value", 0, "Timeout value" },
     { 0 }
 };
 
@@ -33,10 +34,12 @@ struct ArgOpts {
     char* argu;
     char* argw;
     int argt;
+    int argm;
 
     int optu;
     int optw;
     int optt;
+    int optm;
 };
 
 ArgOpts pargs = {};
@@ -55,6 +58,10 @@ static error_t argp_parseopts(int key, char* arg, struct argp_state* state)
         case 't':
             pargs.optt = 1;
             pargs.argt = std::stoi(arg);
+            break;
+        case 'm':
+            pargs.optm = 1;
+            pargs.argm = std::stoi(arg);
             break;
         case ARGP_KEY_ARG:
             return 0;
@@ -180,7 +187,7 @@ long request(char const* url)
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, pargs.argm);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
 
     CURLcode curlcode = curl_easy_perform(curl);
