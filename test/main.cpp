@@ -282,7 +282,13 @@ void worker(int thread_id, std::string url,
                 statistics->resp_list[code_as_string].emplace_back(url_copy);
             }
 
-            std::printf("[%s] - %s\n", to_color(GREEN, http_code).c_str(), url_copy.c_str());
+            if (http_code >= 200 && http_code < 300) {
+                std::printf("[%s] - %s\n", to_color(GREEN, http_code).c_str(), url_copy.c_str());
+            } else if (http_code >= 300 && http_code < 400) {
+                std::printf("[%s] - %s\n", to_color(YELLOW, http_code).c_str(), url_copy.c_str());
+            } else {
+                std::printf("[%s] - %s\n", to_color(RED, http_code).c_str(), url_copy.c_str());
+            }
         }
     }
 }
