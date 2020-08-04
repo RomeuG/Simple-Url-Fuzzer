@@ -17,6 +17,16 @@
 #include <uriparser/Uri.h>
 #include <vector>
 
+#define RESET "\033[0m"
+#define BLACK "\033[30m" /* Black */
+#define RED "\033[31m" /* Red */
+#define GREEN "\033[32m" /* Green */
+#define YELLOW "\033[33m" /* Yellow */
+#define BLUE "\033[34m" /* Blue */
+#define MAGENTA "\033[35m" /* Magenta */
+#define CYAN "\033[36m" /* Cyan */
+#define WHITE "\033[37m" /* White */
+
 // argp stuff
 const char* argp_program_version = "url-fuzzer.0.0.1";
 const char* argp_program_bug_address = "<romeu.bizz@gmail.com>";
@@ -29,6 +39,17 @@ static struct argp_option options[] = {
     { "timeout", 'm', "value", 0, "Timeout value" },
     { 0 }
 };
+
+std::string to_color(char* color, std::string str)
+{
+    return color + str + RESET;
+}
+
+std::string to_color(char* color, int n)
+{
+    std::string s = std::to_string(n);
+    return color + s + RESET;
+}
 
 struct ArgOpts {
     char* argu;
@@ -261,7 +282,7 @@ void worker(int thread_id, std::string url,
                 statistics->resp_list[code_as_string].emplace_back(url_copy);
             }
 
-            std::printf("[%d] - %s\n", http_code, url_copy.c_str());
+            std::printf("[%s] - %s\n", to_color(GREEN, http_code).c_str(), url_copy.c_str());
         }
     }
 }
