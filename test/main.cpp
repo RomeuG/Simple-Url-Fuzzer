@@ -162,6 +162,9 @@ void sigint_handler(int s)
 struct Statistics {
     std::map<std::string, std::vector<std::string>> resp_list;
     std::map<std::string, std::vector<std::string>> error_list;
+
+    int responses = 0;
+    int errors = 0;
 };
 
 std::string get_url_host(char const* url)
@@ -271,6 +274,8 @@ void worker(int thread_id, std::string url,
 
                 auto code_as_string = std::to_string(http_code);
                 statistics->error_list[code_as_string].emplace_back(url_copy);
+
+                statistics->errors++;
             }
 
             std::printf("[%d] - %s (%s)\n", http_code, url_copy.c_str(),
@@ -281,6 +286,8 @@ void worker(int thread_id, std::string url,
 
                 auto code_as_string = std::to_string(http_code);
                 statistics->resp_list[code_as_string].emplace_back(url_copy);
+
+                statistics->responses++;
             }
 
             if (http_code >= 200 && http_code < 300) {
@@ -346,11 +353,11 @@ int main(int argc, char** argv)
                                              &wordlist_shared,
                                              &threads_stopped]() {
         while (!stop_threads && !threads_stopped) {
-            auto percentage = 100.0f * (float)(wordlist_shared->size() / (float)wordlist_total);
+            auto percentage = 100.0f - (100.0f * (float)(wordlist_shared->size() / (float)wordlist_total));
 
-            std::printf("(%d/%d) %0.2f Done / %d errors\n", wordlist_shared->size(), wordlist_total,
-                        percentage, statistics->error_list.size());
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            std::printf("%0.2f (%d/%d) / %d responses / %d errors\n", percentage, wordlist_shared->size(),
+                        wordlist_total, statistics->responses, statistics->errors);
+            std::this_thread::sleep_for(std::chrono::seconds(2));
         }
     });
 
