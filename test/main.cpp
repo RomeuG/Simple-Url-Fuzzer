@@ -5,6 +5,7 @@
 #include <cstring>
 #include <curl/curl.h>
 #include <fstream>
+#include <future>
 #include <getopt.h>
 #include <iostream>
 #include <map>
@@ -152,7 +153,7 @@ static int mkpath(char const* path, mode_t mode)
 
 std::atomic<bool> stop_threads = false;
 
-void signal_handler(int s)
+void sigint_handler(int s)
 {
     printf("Caught signal %d\n", s);
     stop_threads = true;
@@ -283,11 +284,11 @@ void worker(int thread_id, std::string url,
             }
 
             if (http_code >= 200 && http_code < 300) {
-                std::printf("[%s] - %s\n", to_color(GREEN, http_code).c_str(), url_copy.c_str());
+                // std::printf("[%s] - %s\n", to_color(GREEN, http_code).c_str(), url_copy.c_str());
             } else if (http_code >= 300 && http_code < 400) {
-                std::printf("[%s] - %s\n", to_color(YELLOW, http_code).c_str(), url_copy.c_str());
+                // std::printf("[%s] - %s\n", to_color(YELLOW, http_code).c_str(), url_copy.c_str());
             } else {
-                std::printf("[%s] - %s\n", to_color(RED, http_code).c_str(), url_copy.c_str());
+                // std::printf("[%s] - %s\n", to_color(RED, http_code).c_str(), url_copy.c_str());
             }
         }
     }
@@ -322,14 +323,13 @@ int main(int argc, char** argv)
     curl_global_init(CURL_GLOBAL_ALL);
 
     // prepare signal handling
-    struct sigaction sigIntHandler;
+    struct sigaction sigint_action;
+    sigint_action.sa_handler = sigint_handler;
+    sigemptyset(&sigint_action.sa_mask);
+    sigint_action.sa_flags = 0;
+    sigaction(SIGINT, &sigint_action, nullptr); // quit threads and exit clean
 
-    sigIntHandler.sa_handler = signal_handler;
-    sigemptyset(&sigIntHandler.sa_mask);
-    sigIntHandler.sa_flags = 0;
-
-    sigaction(SIGINT, &sigIntHandler, nullptr);
-
+    auto wordlist_total = wordlist.size();
     auto wordlist_shared = std::make_shared<std::vector<std::string>>(wordlist);
 
     std::vector<std::thread> thread_list;
@@ -340,9 +340,26 @@ int main(int argc, char** argv)
         thread_list.emplace_back(std::move(t));
     }
 
+    bool threads_stopped = false;
+    auto a = std::async(std::launch::async, [statistics,
+                                             &wordlist_total,
+                                             &wordlist_shared,
+                                             &threads_stopped]() {
+        while (!stop_threads && !threads_stopped) {
+            auto percentage = 100.0f * (float)(wordlist_shared->size() / (float)wordlist_total);
+
+            std::printf("(%d/%d) %0.2f Done / %d errors\n", wordlist_shared->size(), wordlist_total,
+                        percentage, statistics->error_list.size());
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    });
+
     for (std::thread& t : thread_list) {
         t.join();
     }
+
+    threads_stopped = true;
+    a.wait();
 
     curl_global_cleanup();
 
