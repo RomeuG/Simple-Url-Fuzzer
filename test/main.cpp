@@ -18,18 +18,7 @@
 #include <uriparser/Uri.h>
 #include <vector>
 
-// argp stuff
-const char* argp_program_version = "url-fuzzer.0.0.1";
-const char* argp_program_bug_address = "<romeu.bizz@gmail.com>";
-static char doc[] = "Software to do some URL Fuzzing.";
-static char args_doc[] = "[URL]...";
-static struct argp_option options[] = {
-    { "url", 'u', "value", 0, "Url to fuzz" },
-    { "wordlist", 'w', "value", 0, "Wordlist with 1 string per line" },
-    { "threads", 't', "value", 0, "Number of threads" },
-    { "timeout", 'm', "value", 0, "Timeout value" },
-    { 0 }
-};
+// structs
 
 struct ArgOpts {
     char* argu;
@@ -43,7 +32,26 @@ struct ArgOpts {
     int optm;
 };
 
+// global variables
+
+const char* argp_program_version = "url-fuzzer.0.0.1";
+const char* argp_program_bug_address = "<romeu.bizz@gmail.com>";
+static char doc[] = "Software to do some URL Fuzzing.";
+static char args_doc[] = "[URL]...";
+static struct argp_option options[] = {
+    { "url", 'u', "value", 0, "Url to fuzz" },
+    { "wordlist", 'w', "value", 0, "Wordlist with 1 string per line" },
+    { "threads", 't', "value", 0, "Number of threads" },
+    { "timeout", 'm', "value", 0, "Timeout value" },
+    { 0 }
+};
+
 ArgOpts pargs = {};
+
+std::atomic<bool> stop_threads = false;
+
+std::mutex wordlist_mutex;
+std::mutex stats_mutex;
 
 static error_t argp_parseopts(int key, char* arg, struct argp_state* state)
 {
@@ -129,8 +137,6 @@ static int mkpath(char const* path, mode_t mode)
 
     return status;
 }
-
-std::atomic<bool> stop_threads = false;
 
 void sigint_handler(int s)
 {
@@ -236,9 +242,6 @@ long request(char const* url)
     return (curlcode == 0) ? http_code : curlcode;
 }
 
-std::mutex wordlist_mutex;
-std::mutex stats_mutex;
-
 void worker(int thread_id, std::string url,
             std::shared_ptr<std::vector<std::string>> wordlist,
             std::shared_ptr<Statistics> statistics)
@@ -275,9 +278,6 @@ void worker(int thread_id, std::string url,
 
                 statistics->errors++;
             }
-
-            std::printf("[%d] - %s (%s)\n", http_code, url_copy.c_str(),
-                        curl_easy_strerror((CURLcode)http_code));
         } else {
             {
                 std::lock_guard<std::mutex> const lock(stats_mutex);
@@ -286,14 +286,6 @@ void worker(int thread_id, std::string url,
                 statistics->resp_list[code_as_string].emplace_back(url_copy);
 
                 statistics->responses++;
-            }
-
-            if (http_code >= 200 && http_code < 300) {
-                // std::printf("[%s] - %s\n", to_color(GREEN, http_code).c_str(), url_copy.c_str());
-            } else if (http_code >= 300 && http_code < 400) {
-                // std::printf("[%s] - %s\n", to_color(YELLOW, http_code).c_str(), url_copy.c_str());
-            } else {
-                // std::printf("[%s] - %s\n", to_color(RED, http_code).c_str(), url_copy.c_str());
             }
         }
     }
