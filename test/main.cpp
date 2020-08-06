@@ -184,7 +184,6 @@ void file_write_lines(char const* filename, std::vector<std::string> vec)
     std::ofstream ofs(filename);
 
     if (ofs) {
-        std::printf("Writing to file: %s\n", filename);
         for (auto& str : vec) {
             ofs << str << std::endl;
         }
@@ -370,18 +369,18 @@ int main(int argc, char** argv)
         auto file_name = it.first + ".txt";
         auto path = host + file_name;
 
-        std::printf("Begin writing to file: %s\n", path.c_str());
-
         file_write_lines(path.c_str(), it.second);
+
+        std::printf("Writing to file: %s\n", file_name.c_str());
     }
 
     for (auto& it : statistics->error_list) {
         auto file_name = it.first + ".txt";
         auto path = host + file_name;
 
-        std::printf("Begin writing to file: %s\n", path.c_str());
-
         file_write_lines(path.c_str(), it.second);
+
+        std::printf("Wrote to file: %s\n", file_name.c_str());
     }
 
     std::printf("Memory usage: %d\n", get_memory_usage());
