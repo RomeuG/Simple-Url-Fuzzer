@@ -193,6 +193,26 @@ void file_write_lines(char const* filename, std::vector<std::string> vec)
     }
 }
 
+void setup_signal_handlers()
+{
+    struct sigaction sigint_action;
+    sigint_action.sa_handler = sigint_handler;
+    sigemptyset(&sigint_action.sa_mask);
+    sigint_action.sa_flags = 0;
+    sigaction(SIGINT, &sigint_action, nullptr); // quit threads and exit clean
+}
+
+int get_memory_usage()
+{
+    struct rusage usage;
+    int who = RUSAGE_SELF;
+    int ret;
+
+    ret = getrusage(who, &usage);
+
+    return usage.ru_maxrss;
+}
+
 size_t write_data(void* buffer, size_t size, size_t nmemb, void* userp)
 {
     return size * nmemb;
@@ -309,11 +329,7 @@ int main(int argc, char** argv)
     curl_global_init(CURL_GLOBAL_ALL);
 
     // prepare signal handling
-    struct sigaction sigint_action;
-    sigint_action.sa_handler = sigint_handler;
-    sigemptyset(&sigint_action.sa_mask);
-    sigint_action.sa_flags = 0;
-    sigaction(SIGINT, &sigint_action, nullptr); // quit threads and exit clean
+    setup_signal_handlers();
 
     auto wordlist_total = wordlist.size();
     auto wordlist_shared = std::make_shared<std::vector<std::string>>(wordlist);
@@ -368,13 +384,7 @@ int main(int argc, char** argv)
         file_write_lines(path.c_str(), it.second);
     }
 
-    struct rusage usage;
-    int who = RUSAGE_SELF;
-    int ret;
-
-    ret = getrusage(who, &usage);
-
-    std::printf("Memory usage: %d\n", usage.ru_maxrss);
+    std::printf("Memory usage: %d\n", get_memory_usage());
     std::printf("Total file lines: %d\n", wordlist.size());
     std::printf("Stats: %d responses\n", statistics->resp_list.size());
 
