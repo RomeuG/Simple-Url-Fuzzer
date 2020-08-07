@@ -278,7 +278,7 @@ void worker(int thread_id, std::string url,
                 break;
             }
 
-            line = wordlist->at(global_counter++);
+			line = wordlist->operator[](global_counter++);
         }
 
         replace(url_copy, "@@", line);
@@ -353,16 +353,15 @@ int main(int argc, char** argv)
     std::shared_ptr<Statistics> statistics = std::make_shared<Statistics>();
 
     for (int i = 0; i < threads; i++) {
-        std::thread t(worker, i, url, wordlist_shared, statistics);
-        thread_list.emplace_back(std::move(t));
+		thread_list.emplace_back(std::thread(worker, i, url, wordlist_shared, statistics));
     }
 
     bool threads_stopped = false;
     auto reporter = std::async(std::launch::async, [&]() {
         while (!stop_threads && !threads_stopped) {
-            auto percentage = 100.0f - (100.0f * (float)(wordlist_shared->size() / (float)wordlist_total));
+            auto percentage = 100.0f * (float)(global_counter / (float)wordlist_total);
 
-            std::printf("%0.2f (%d/%d) / %d responses / %d errors\n", percentage, (wordlist_total - wordlist_shared->size()),
+            std::printf("%0.2f (%d/%d) / %d responses / %d errors\n", percentage, global_counter,
                         wordlist_total, statistics->responses, statistics->errors);
 
             std::this_thread::sleep_for(std::chrono::seconds(2));
