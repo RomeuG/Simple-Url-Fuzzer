@@ -225,21 +225,20 @@ size_t write_data(void* buffer, size_t size, size_t nmemb, void* userp)
     return size * nmemb;
 }
 
-long request(char const* url)
+long request(char const* url, CURL* curl)
 {
-    CURL* curl = curl_easy_init();
+	curl_easy_reset(curl);
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, pargs.argm);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
+	curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
 
     CURLcode curlcode = curl_easy_perform(curl);
     long http_code = 0;
 
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-
-    curl_easy_cleanup(curl);
 
     return (curlcode == 0) ? http_code : curlcode;
 }
@@ -250,6 +249,8 @@ void worker(int thread_id, std::string url,
             std::shared_ptr<std::vector<std::string>> wordlist,
             std::shared_ptr<Statistics> statistics)
 {
+	CURL* curl = curl_easy_init();
+
     for (;;) {
         std::string url_copy = url;
 
@@ -271,7 +272,7 @@ void worker(int thread_id, std::string url,
         }
 
         replace(url_copy, "@@", line);
-        long http_code = request(url_copy.c_str());
+        long http_code = request(url_copy.c_str(), curl);
 
         if (http_code < 200) {
             {
@@ -293,6 +294,8 @@ void worker(int thread_id, std::string url,
             }
         }
     }
+
+	curl_easy_cleanup(curl);
 }
 
 int main(int argc, char** argv)
@@ -348,7 +351,7 @@ int main(int argc, char** argv)
             std::this_thread::sleep_for(std::chrono::seconds(2));
         }
     });
-	a.
+
     for (std::thread& t : thread_list) {
         t.join();
     }
