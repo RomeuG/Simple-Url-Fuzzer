@@ -61,6 +61,9 @@ std::atomic<bool> stop_threads = false;
 std::mutex wordlist_mutex;
 std::mutex stats_mutex;
 
+int global_counter = 0;
+int limit = 0;
+
 // utils
 
 static error_t argp_parseopts(int key, char* arg, struct argp_state* state)
@@ -173,18 +176,26 @@ std::string get_url_host(char const* url)
     return host;
 }
 
-std::vector<std::string> file_read_lines(char const* file)
+int file_count_lines(char const* file)
+{
+	int count = 0;
+
+	std::ifstream in(file);
+	count = std::count(std::istreambuf_iterator<char>(in),
+						   std::istreambuf_iterator<char>(), '\n');
+
+	return count;
+}
+
+void file_read_lines(char const* file, std::vector<std::string> &lines)
 {
     std::ifstream in(file);
 
     std::string line;
-    std::vector<std::string> lines;
 
     while (std::getline(in, line)) {
         lines.emplace_back(line);
     }
-
-    return lines;
 }
 
 void file_write_lines(char const* filename, std::vector<std::string> vec)
@@ -263,12 +274,11 @@ void worker(int thread_id, std::string url,
         {
             std::lock_guard<std::mutex> const lock(wordlist_mutex);
 
-            if (wordlist->size() < 1) {
+            if (global_counter >= limit) {
                 break;
             }
 
-            line = wordlist->at(0);
-            wordlist->erase(wordlist->begin());
+            line = wordlist->at(global_counter++);
         }
 
         replace(url_copy, "@@", line);
@@ -318,7 +328,14 @@ int main(int argc, char** argv)
         exit(1);
     }
 
-    auto wordlist = file_read_lines(file.c_str());
+	int file_line_count = file_count_lines(file.c_str());
+	limit = file_line_count;
+	std::printf("File has %d lines\n", file_line_count);
+
+	std::vector<std::string> wordlist;
+	wordlist.reserve(file_line_count + 1);
+
+    file_read_lines(file.c_str(), wordlist);
     if (wordlist.size() < 1) {
         std::printf("Wordlist is empty!\n");
         exit(1);
