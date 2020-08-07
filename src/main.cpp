@@ -1,22 +1,23 @@
-#include <argp.h>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
-#include <curl/curl.h>
 #include <fstream>
 #include <future>
-#include <getopt.h>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <thread>
+#include <vector>
+
+#include <argp.h>
+#include <curl/curl.h>
+#include <getopt.h>
 #include <signal.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
-#include <thread>
 #include <uriparser/Uri.h>
-#include <vector>
 
 // structs
 
