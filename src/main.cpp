@@ -32,6 +32,14 @@ struct ArgOpts {
     int optm;
 };
 
+struct Statistics {
+    std::map<std::string, std::vector<std::string>> resp_list;
+    std::map<std::string, std::vector<std::string>> error_list;
+
+    int responses = 0;
+    int errors = 0;
+};
+
 // global variables
 
 const char* argp_program_version = "url-fuzzer.0.0.1";
@@ -52,6 +60,8 @@ std::atomic<bool> stop_threads = false;
 
 std::mutex wordlist_mutex;
 std::mutex stats_mutex;
+
+// utils
 
 static error_t argp_parseopts(int key, char* arg, struct argp_state* state)
 {
@@ -144,14 +154,6 @@ void sigint_handler(int s)
     stop_threads = true;
 }
 
-struct Statistics {
-    std::map<std::string, std::vector<std::string>> resp_list;
-    std::map<std::string, std::vector<std::string>> error_list;
-
-    int responses = 0;
-    int errors = 0;
-};
-
 std::string get_url_host(char const* url)
 {
     std::string host;
@@ -241,6 +243,8 @@ long request(char const* url)
 
     return (curlcode == 0) ? http_code : curlcode;
 }
+
+// logic
 
 void worker(int thread_id, std::string url,
             std::shared_ptr<std::vector<std::string>> wordlist,
@@ -334,22 +338,23 @@ int main(int argc, char** argv)
     }
 
     bool threads_stopped = false;
-    auto a = std::async(std::launch::async, [&]() {
+    auto reporter = std::async(std::launch::async, [&]() {
         while (!stop_threads && !threads_stopped) {
             auto percentage = 100.0f - (100.0f * (float)(wordlist_shared->size() / (float)wordlist_total));
 
             std::printf("%0.2f (%d/%d) / %d responses / %d errors\n", percentage, (wordlist_total - wordlist_shared->size()),
                         wordlist_total, statistics->responses, statistics->errors);
+
             std::this_thread::sleep_for(std::chrono::seconds(2));
         }
     });
-
+	a.
     for (std::thread& t : thread_list) {
         t.join();
     }
 
     threads_stopped = true;
-    a.wait();
+    reporter.wait();
 
     curl_global_cleanup();
 
@@ -376,8 +381,6 @@ int main(int argc, char** argv)
     }
 
     std::printf("Memory usage: %d\n", get_memory_usage());
-    std::printf("Total file lines: %d\n", wordlist.size());
-    std::printf("Stats: %d responses\n", statistics->resp_list.size());
 
     return 0;
 }
