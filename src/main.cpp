@@ -179,16 +179,16 @@ std::string get_url_host(char const* url)
 
 int file_count_lines(char const* file)
 {
-	int count = 0;
+    int count = 0;
 
-	std::ifstream in(file);
-	count = std::count(std::istreambuf_iterator<char>(in),
-						   std::istreambuf_iterator<char>(), '\n');
+    std::ifstream in(file);
+    count = std::count(std::istreambuf_iterator<char>(in),
+                       std::istreambuf_iterator<char>(), '\n');
 
-	return count;
+    return count;
 }
 
-void file_read_lines(char const* file, std::vector<std::string> &lines)
+void file_read_lines(char const* file, std::vector<std::string>& lines)
 {
     std::ifstream in(file);
 
@@ -239,13 +239,13 @@ size_t write_data(void* buffer, size_t size, size_t nmemb, void* userp)
 
 long request(char const* url, CURL* curl)
 {
-	curl_easy_reset(curl);
+    curl_easy_reset(curl);
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, pargs.argm);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
-	curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+    curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
 
     CURLcode curlcode = curl_easy_perform(curl);
     long http_code = 0;
@@ -261,7 +261,7 @@ void worker(int thread_id, std::string url,
             std::shared_ptr<std::vector<std::string>> wordlist,
             std::shared_ptr<Statistics> statistics)
 {
-	CURL* curl = curl_easy_init();
+    CURL* curl = curl_easy_init();
 
     for (;;) {
         std::string url_copy = url;
@@ -279,7 +279,7 @@ void worker(int thread_id, std::string url,
                 break;
             }
 
-			line = wordlist->operator[](global_counter++);
+            line = wordlist->operator[](global_counter++);
         }
 
         replace(url_copy, "@@", line);
@@ -306,7 +306,7 @@ void worker(int thread_id, std::string url,
         }
     }
 
-	curl_easy_cleanup(curl);
+    curl_easy_cleanup(curl);
 }
 
 int main(int argc, char** argv)
@@ -329,12 +329,12 @@ int main(int argc, char** argv)
         exit(1);
     }
 
-	int file_line_count = file_count_lines(file.c_str());
-	limit = file_line_count;
-	std::printf("File has %d lines\n", file_line_count);
+    int file_line_count = file_count_lines(file.c_str());
+    limit = file_line_count;
+    std::printf("File has %d lines\n", file_line_count);
 
-	std::vector<std::string> wordlist;
-	wordlist.reserve(file_line_count + 1);
+    std::vector<std::string> wordlist;
+    wordlist.reserve(file_line_count + 1);
 
     file_read_lines(file.c_str(), wordlist);
     if (wordlist.size() < 1) {
@@ -354,7 +354,7 @@ int main(int argc, char** argv)
     std::shared_ptr<Statistics> statistics = std::make_shared<Statistics>();
 
     for (int i = 0; i < threads; i++) {
-		thread_list.emplace_back(std::thread(worker, i, url, wordlist_shared, statistics));
+        thread_list.emplace_back(std::thread(worker, i, url, wordlist_shared, statistics));
     }
 
     bool threads_stopped = false;
