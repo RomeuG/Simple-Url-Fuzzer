@@ -26,11 +26,13 @@ struct ArgOpts {
     char* argw;
     int argt;
     int argm;
+    int argv;
 
     int optu;
     int optw;
     int optt;
     int optm;
+    int optv;
 };
 
 struct Statistics {
@@ -52,6 +54,7 @@ static struct argp_option options[] = {
     { "wordlist", 'w', "value", 0, "Wordlist with 1 string per line" },
     { "threads", 't', "value", 0, "Number of threads" },
     { "timeout", 'm', "value", 0, "Timeout value" },
+    { "verbose", 'v', 0, 0, "Verbose" },
     { 0 }
 };
 
@@ -86,6 +89,9 @@ static error_t argp_parseopts(int key, char* arg, struct argp_state* state)
             pargs.optm = 1;
             pargs.argm = std::stoi(arg);
             break;
+        case 'v':
+            pargs.optv = 1;
+            pargs.argv = 1;
         case ARGP_KEY_ARG:
             return 0;
         default:
@@ -245,6 +251,9 @@ long request(char const* url, CURL* curl)
     curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, pargs.argm);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
+
+    curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
+
     curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
 
     CURLcode curlcode = curl_easy_perform(curl);
@@ -302,6 +311,12 @@ void worker(int thread_id, std::string url,
                 statistics->resp_list[code_as_string].emplace_back(url_copy);
 
                 statistics->responses++;
+            }
+
+            if (pargs.optv) {
+                if (http_code == 200) {
+                    std::printf("[%d] - %s\n", http_code, url_copy.c_str());
+                }
             }
         }
     }
