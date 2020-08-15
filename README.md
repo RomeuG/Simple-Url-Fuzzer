@@ -27,3 +27,7 @@ Software to do some URL Fuzzing.
       --usage                Give a short usage message
   -V, --version              Print program version
 ```
+
+Example:
+
+`$ ./suf -u "https://www.example.com/@@" -w wordlists/wordlist.txt -t 64 -e ".php"`
