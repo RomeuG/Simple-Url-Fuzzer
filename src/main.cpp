@@ -319,8 +319,6 @@ void worker(int thread_id, std::string url,
             replace(url_copy, "@@", line);
         }
 
-        //replace(url_copy, "@@", line);
-        std::fprintf(stdout, "Trying URL: %s\n", url_copy.c_str());
         long http_code = request(url_copy.c_str(), curl);
 
         if (http_code < 200) {
