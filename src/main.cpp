@@ -24,11 +24,13 @@
 struct ArgOpts {
     char* argu;
     char* argw;
+    char* arge;
     int argt;
     int argm;
 
     int optu;
     int optw;
+    int opte;
     int optt;
     int optm;
     int optv;
@@ -54,6 +56,7 @@ static struct argp_option options[] = {
     { "threads", 't', "value", 0, "Number of threads" },
     { "timeout", 'm', "value", 0, "Timeout value" },
     { "verbose", 'v', 0, 0, "Verbose" },
+    { "extension", 'e', "value", 0, "Add value at the end of each word" },
     { 0 }
 };
 
@@ -61,6 +64,7 @@ static struct argp_option options[] = {
 ArgOpts pargs = {
     nullptr, // url
     nullptr, // wordlist
+    nullptr, // timeout
     8, // threads
     10, // timeout
 
@@ -95,6 +99,10 @@ static error_t argp_parseopts(int key, char* arg, struct argp_state* state)
         case 'w':
             pargs.optw = 1;
             pargs.argw = strdup(arg);
+            break;
+        case 'e':
+            pargs.opte = 1;
+            pargs.arge = strdup(arg);
             break;
         case 't':
             pargs.optt = 1;
@@ -305,7 +313,14 @@ void worker(int thread_id, std::string url,
             line = wordlist->operator[](global_counter++);
         }
 
-        replace(url_copy, "@@", line);
+        if (pargs.opte) {
+            replace(url_copy, "@@", line + pargs.arge);
+        } else {
+            replace(url_copy, "@@", line);
+        }
+
+        //replace(url_copy, "@@", line);
+        std::fprintf(stdout, "Trying URL: %s\n", url_copy.c_str());
         long http_code = request(url_copy.c_str(), curl);
 
         if (http_code < 200) {
