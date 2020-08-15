@@ -172,7 +172,7 @@ std::string get_url_host(char const* url)
     char const* error;
 
     if (uriParseSingleUriA(&uri, url, &error) != URI_SUCCESS) {
-        std::printf("Failure parsing string!\n");
+        std::fprintf(stdout, "Failure parsing string!\n");
         exit(1);
     }
 
@@ -214,7 +214,7 @@ void file_write_lines(char const* filename, std::vector<std::string> vec)
             ofs << str << std::endl;
         }
     } else {
-        std::printf("Failure opening %s for writing\n", filename);
+        std::fprintf(stdout, "Failure opening %s for writing\n", filename);
     }
 }
 
@@ -315,7 +315,7 @@ void worker(int thread_id, std::string url,
 
             if (pargs.optv) {
                 if (http_code == 200) {
-                    std::printf("[%d] - %s\n", http_code, url_copy.c_str());
+                    std::fprintf(stdout, "[%d] - %s\n", http_code, url_copy.c_str());
                 }
             }
         }
@@ -331,7 +331,7 @@ int main(int argc, char** argv)
 
     // TODO: check this in argp_parseopts
     if (pargs.argu == nullptr) {
-        std::printf("Url not valid!\n");
+        std::fprintf(stdout, "Url not valid!\n");
         exit(1);
     }
 
@@ -340,20 +340,20 @@ int main(int argc, char** argv)
     int threads = pargs.argt;
 
     if (url.find("@@") == -1) {
-        std::printf("Url does not include fuzz indicator!\n");
+        std::fprintf(stdout, "Url does not include fuzz indicator!\n");
         exit(1);
     }
 
     int file_line_count = file_count_lines(file.c_str());
     limit = file_line_count;
-    std::printf("File has %d lines\n", file_line_count);
+    std::fprintf(stdout, "File has %d lines\n", file_line_count);
 
     std::vector<std::string> wordlist;
     wordlist.reserve(file_line_count + 1);
 
     file_read_lines(file.c_str(), wordlist);
     if (wordlist.size() < 1) {
-        std::printf("Wordlist is empty!\n");
+        std::fprintf(stdout, "Wordlist is empty!\n");
         exit(1);
     }
 
@@ -377,8 +377,8 @@ int main(int argc, char** argv)
         while (!stop_threads && !threads_stopped) {
             auto percentage = 100.0f * (float)(global_counter / (float)wordlist_total);
 
-            std::printf("%0.2f (%d/%d) / %d responses / %d errors\n", percentage, global_counter,
-                        wordlist_total, statistics->responses, statistics->errors);
+            std::fprintf(stdout, "%0.2f (%d/%d) / %d responses / %d errors\n", percentage, global_counter,
+                         wordlist_total, statistics->responses, statistics->errors);
 
             std::this_thread::sleep_for(std::chrono::seconds(2));
         }
@@ -403,7 +403,7 @@ int main(int argc, char** argv)
 
         file_write_lines(path.c_str(), it.second);
 
-        std::printf("Writing to file: %s\n", file_name.c_str());
+        std::fprintf(stdout, "Writing to file: %s\n", file_name.c_str());
     }
 
     for (auto& it : statistics->error_list) {
@@ -412,10 +412,10 @@ int main(int argc, char** argv)
 
         file_write_lines(path.c_str(), it.second);
 
-        std::printf("Wrote to file: %s\n", file_name.c_str());
+        std::fprintf(stdout, "Wrote to file: %s\n", file_name.c_str());
     }
 
-    std::printf("Memory usage: %d\n", get_memory_usage());
+    std::fprintf(stdout, "Memory usage: %d\n", get_memory_usage());
 
     return 0;
 }
