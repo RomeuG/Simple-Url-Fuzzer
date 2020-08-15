@@ -26,7 +26,6 @@ struct ArgOpts {
     char* argw;
     int argt;
     int argm;
-    int argv;
 
     int optu;
     int optw;
@@ -58,7 +57,15 @@ static struct argp_option options[] = {
     { 0 }
 };
 
-ArgOpts pargs = {};
+// set defaults
+ArgOpts pargs = {
+    nullptr, // url
+    nullptr, // wordlist
+    8, // threads
+    10, // timeout
+
+    0, 0, 0, 0, 0 // args used
+};
 
 std::atomic<bool> stop_threads = false;
 
@@ -73,10 +80,18 @@ int limit = 0;
 static error_t argp_parseopts(int key, char* arg, struct argp_state* state)
 {
     switch (key) {
-        case 'u':
+        case 'u': {
+            std::string url = std::string(arg);
+
+            if (url.find("@@") == -1) {
+                std::fprintf(stderr, "Url does not include fuzz indicator!\n");
+                exit(1);
+            }
+
             pargs.optu = 1;
             pargs.argu = strdup(arg);
             break;
+        }
         case 'w':
             pargs.optw = 1;
             pargs.argw = strdup(arg);
@@ -91,7 +106,6 @@ static error_t argp_parseopts(int key, char* arg, struct argp_state* state)
             break;
         case 'v':
             pargs.optv = 1;
-            pargs.argv = 1;
         case ARGP_KEY_ARG:
             return 0;
         default:
@@ -214,7 +228,7 @@ void file_write_lines(char const* filename, std::vector<std::string> vec)
             ofs << str << std::endl;
         }
     } else {
-        std::fprintf(stdout, "Failure opening %s for writing\n", filename);
+        std::fprintf(stderr, "Failure opening %s for writing\n", filename);
     }
 }
 
@@ -313,10 +327,8 @@ void worker(int thread_id, std::string url,
                 statistics->responses++;
             }
 
-            if (pargs.optv) {
-                if (http_code == 200) {
-                    std::fprintf(stdout, "[%d] - %s\n", http_code, url_copy.c_str());
-                }
+            if (pargs.optv && http_code == 200) {
+                std::fprintf(stdout, "[%d] - %s\n", http_code, url_copy.c_str());
             }
         }
     }
@@ -329,20 +341,14 @@ int main(int argc, char** argv)
     static struct argp argp = { options, argp_parseopts, args_doc, doc, 0, 0, 0 };
     argp_parse(&argp, argc, argv, 0, 0, &pargs);
 
-    // TODO: check this in argp_parseopts
     if (pargs.argu == nullptr) {
-        std::fprintf(stdout, "Url not valid!\n");
+        std::fprintf(stderr, "Url not valid!\n");
         exit(1);
     }
 
     std::string url = pargs.argu;
     std::string file = pargs.argw;
     int threads = pargs.argt;
-
-    if (url.find("@@") == -1) {
-        std::fprintf(stdout, "Url does not include fuzz indicator!\n");
-        exit(1);
-    }
 
     int file_line_count = file_count_lines(file.c_str());
     limit = file_line_count;
@@ -403,7 +409,7 @@ int main(int argc, char** argv)
 
         file_write_lines(path.c_str(), it.second);
 
-        std::fprintf(stdout, "Writing to file: %s\n", file_name.c_str());
+        std::fprintf(stdout, "Wrote to file: %s\n", file_name.c_str());
     }
 
     for (auto& it : statistics->error_list) {
