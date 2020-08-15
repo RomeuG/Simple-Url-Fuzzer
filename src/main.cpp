@@ -46,9 +46,9 @@ struct Statistics {
 
 // global variables
 
-const char* argp_program_version = "url-fuzzer.0.0.1";
+const char* argp_program_version = "url-fuzzer-0.0.1";
 const char* argp_program_bug_address = "<romeu.bizz@gmail.com>";
-static char doc[] = "Software to do some URL Fuzzing.";
+static char doc[] = "Simple URL Fuzzer.";
 static char args_doc[] = "[URL]...";
 static struct argp_option options[] = {
     { "url", 'u', "value", 0, "Url to fuzz" },
